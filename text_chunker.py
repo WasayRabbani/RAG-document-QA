@@ -27,12 +27,12 @@ class TextChunker:
         return chunks
 
 # Test
-from pdf_loader import PDFLoader
-load=PDFLoader(r"D:\IDM Files\sample.pdf")  
-text=load.load_pdf()
+# from pdf_loader import PDFLoader
+# # load=PDFLoader(r"D:\IDM Files\sample.pdf")  
+# # text=load.load_pdf()
     
-make_chunks=TextChunker(text)
-chunk=make_chunks.chunking()
-# print(chunk[4])
+# make_chunks=TextChunker(text)
+# chunk=make_chunks.chunking()
+# # print(chunk[4])
 
 

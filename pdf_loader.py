@@ -25,9 +25,8 @@ class PDFLoader:
        
         return extracted_text  # return all extracted text
 
-# Testing
 
-    # link = r"D:\IDM Files\sample.pdf"
-    # p1 = PDFLoader(link)
+# link = r"sample.pdf"
+# p1 = PDFLoader(link)
 
-    # print(p1.load_pdf())
+# print(p1.load_pdf())
