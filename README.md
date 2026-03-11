@@ -14,6 +14,19 @@ Built with Python, Google Gemini API, FAISS, and Streamlit.
 - Answers are generated strictly from your document — no hallucination
 
 ---
+## Questions to ask
+
+1. When was TechNova founded?
+2. Who are the founders of TechNova?
+3. How many employees does TechNova have?
+4. What is NovaChat and how much does it cost?
+5. What is Sara Khan's educational background?
+6. How many leave days do employees get?
+7. What is TechNova's annual revenue in 2023?
+8. Which hospital uses NovaSearch?
+9. What technology stack does TechNova use?
+10. Where is TechNova's head office located?
+
 
 ## Project Structure
 
