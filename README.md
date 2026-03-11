@@ -28,6 +28,9 @@ Built with Python, Google Gemini API, FAISS, and Streamlit.
 10. Where is TechNova's head office located?
 
 
+## Questions to ask
+![alt text](workflow.png)
+
 ## Project Structure
 
 ```
