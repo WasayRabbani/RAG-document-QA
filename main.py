@@ -28,10 +28,10 @@ whole_index=stored_vector.making_faiss()
 q='When was TechNova founded?'
 qh=QueryHandler(question=q,container=whole_index,chunks=chunks)
 content=qh.get_results()
-print(content)
+# print(content)
 
-# LLM=LLMHandler(question=q,chunks=content)
-# print(LLM.make_chatbot())
+LLM=LLMHandler(question=q,chunks=content)
+print(LLM.make_chatbot())
 
 # print(len(chunks))  # kitne chunks total?
 # print(chunks[1])    # index 1 kya hai?

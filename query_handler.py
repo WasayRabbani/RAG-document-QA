@@ -28,7 +28,7 @@ class QueryHandler:
     def compare_query(self):
         
         
-        self.distance,self.index=self.container.search(self.query_array,k=2)
+        self.distance,self.index=self.container.search(self.query_array,k=4)
         return self.distance,self.index  
 
     
