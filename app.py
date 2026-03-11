@@ -26,17 +26,17 @@ if st.button('Search'):
 
     make_embeddings=EmbeddingGenerator(chunks)
     embeddings=make_embeddings.embed_text()
-    # print(embeddings)
+ 
 
     stored_vector=VectorStore(embeddings)
     whole_index=stored_vector.making_faiss()
-    # print(stored_vector)
+
 
 
     
     qh=QueryHandler(question=question,container=whole_index,chunks=chunks)
     content=qh.get_results()
-    # print(content)
+    
 
     LLM=LLMHandler(question=question,chunks=content)
     st.write(LLM.make_chatbot())
