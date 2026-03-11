@@ -1,14 +1,11 @@
-
-from google import genai
-from dotenv import load_dotenv
-
+from gemini_client import get_client
 
 class EmbeddingGenerator:
     
     def __init__(self,chunks_made):
         self.chunks=chunks_made
-        load_dotenv()
-        self.client=genai.Client()
+        
+        self.client=get_client()
   
     def embed_text(self):
         self.embedded_data=self.client.models.embed_content(

@@ -26,13 +26,6 @@ class TextChunker:
         chunks = splitter.split_text(self.text)
         return chunks
 
-# Test
-# from pdf_loader import PDFLoader
-# # load=PDFLoader(r"D:\IDM Files\sample.pdf")  
-# # text=load.load_pdf()
-    
-# make_chunks=TextChunker(text)
-# chunk=make_chunks.chunking()
-# # print(chunk[4])
+
 
 
