@@ -1,0 +1,25 @@
+2026-05-15 14:58:09,824 - INFO - No saved index found for 'sample'. Processing PDF...
+2026-05-15 14:58:12,182 - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents "HTTP/1.1 200 OK"
+2026-05-15 14:58:12,999 - INFO - Querying: When was TechNova founded?
+2026-05-15 14:58:14,080 - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents "HTTP/1.1 200 OK"
+2026-05-15 14:58:15,109 - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-15 15:07:48,640 - INFO - No saved index found for 'Intro to Psychology'. Processing PDF...
+2026-05-15 15:07:51,210 - INFO - Querying: What are the Concepts That Explain Perception Errors
+2026-05-15 15:07:52,351 - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents "HTTP/1.1 200 OK"
+2026-05-15 15:07:54,033 - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-15 15:08:17,015 - INFO - Loaded existing index and chunks for 'Intro to Psychology' from disk.
+2026-05-15 15:08:17,016 - INFO - Querying: What are the Concepts That Explain Perception Errors. Tell all of them
+2026-05-15 15:08:17,926 - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents "HTTP/1.1 200 OK"
+2026-05-15 15:08:18,832 - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-15 15:11:47,940 - INFO - Loaded existing index for 'sample'.
+2026-05-15 15:11:47,940 - INFO - Querying: What are the Cultural Influences on Perception
+2026-05-15 15:11:48,683 - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents "HTTP/1.1 200 OK"
+2026-05-15 15:11:49,963 - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-15 15:14:12,825 - INFO - Loaded existing index for 'Intro to Psychology'.
+2026-05-15 15:14:12,825 - INFO - Querying: What are the Cultural Influences on Perception
+2026-05-15 15:14:14,165 - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents "HTTP/1.1 200 OK"
+2026-05-15 15:14:15,047 - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-15 15:14:49,495 - INFO - Loaded existing index for 'Intro to Psychology'.
+2026-05-15 15:14:49,495 - INFO - Querying: What are the Concepts That Explain Perception Errors
+2026-05-15 15:14:50,407 - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents "HTTP/1.1 200 OK"
+2026-05-15 15:14:52,295 - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"

@@ -1,207 +1,112 @@
-# RAG Document Q&A
+# PDF Brain 🧠 — Production-Ready RAG Document Q&A
 
-Upload any PDF and ask questions. AI answers using only your document.
+PDF Brain is a high-performance RAG (Retrieval-Augmented Generation) application that allows users to upload PDF documents and have laser-focused conversations with them. 
 
-Built with Python, Google Gemini API, FAISS, and Streamlit.
+Unlike basic RAG apps, this system uses **local offline embeddings** and **cross-encoder reranking** to ensure zero rate limits and industry-leading accuracy.
+
+---
+
+## 🚀 Key Features
+
+- **Local Embeddings (Offline):** Uses `all-MiniLM-L6-v2` locally via `sentence-transformers`. No Google Gemini API rate limits or costs for embeddings.
+- **Cross-Encoder Reranking:** Implements `ms-marco-MiniLM-L-6-v2` to double-check search results, ensuring the AI only sees the absolute most relevant context.
+- **Multi-User Session Support:** Every upload generates a unique UUID session, allowing multiple users to chat with different documents simultaneously without data collisions.
+- **FastAPI + React (Vite) Architecture:** Modern, decoupled full-stack architecture for production speed and scalability.
+- **Groq LLM Acceleration:** Powered by Llama 3.3 70B via Groq for near-instant responses.
 
 ---
 
-## What This App Does
+## 🛠️ Tech Stack
 
-- Upload any PDF document
-- Ask questions in plain English
-- AI finds the most relevant sections from your document
-- Answers are generated strictly from your document — no hallucination
+- **Backend:** Python, FastAPI, Uvicorn
+- **Frontend:** React, TypeScript, Vite, Axios
+- **Vector DB:** FAISS (Facebook AI Similarity Search)
+- **Embeddings:** Sentence-Transformers (Local/Offline)
+- **Reranker:** Cross-Encoder (Local/Offline)
+- **LLM:** Groq (Llama 3.3 70B)
+- **Styling:** CSS3 with Dark/Light mode support & animations
 
 ---
-## Questions to ask
 
-1. When was TechNova founded?
-2. Who are the founders of TechNova?
-3. How many employees does TechNova have?
-4. What is NovaChat and how much does it cost?
-5. What is Sara Khan's educational background?
-6. How many leave days do employees get?
-7. What is TechNova's annual revenue in 2023?
-8. Which hospital uses NovaSearch?
-9. What technology stack does TechNova use?
-10. Where is TechNova's head office located?
-
-
-## Workflow
-![alt text](workflow.png)
-
-## Project Structure
+## 📂 Project Structure
 
 ```
 rag-document-qa/
-├── app.py                    # Streamlit UI — run this
-├── main.py                   # CLI version for testing
-├── pdf_loader.py             # PDFLoader class — extracts text from PDF
-├── text_chunker.py           # TextChunker class — splits text into chunks
-├── gemini_client.py          # get_client() — Gemini API connection
-├── embedding_generator.py    # EmbeddingGenerator class — creates embeddings
-├── vector_store.py           # VectorStore class — stores embeddings in FAISS
-├── query_handler.py          # QueryHandler class — searches relevant chunks
-├── LLM_handler.py            # LLMHandler class — generates final answer
-├── .env                      # Your API key (never share this)
-├── .gitignore                # Ignores .env and venv
-└── requirements.txt          # All dependencies
+├── backend/
+│   ├── storage/             # FAISS indices and chunk pickles
+│   ├── uploads/             # Temporarily stored PDF files
+│   ├── api.py               # FastAPI server & endpoints
+│   ├── local_embedder.py    # Singleton for local embedding model
+│   ├── local_reranker.py    # Singleton for cross-encoder reranker
+│   ├── embedding_generator.py
+│   ├── query_handler.py     # Search logic with reranking
+│   ├── LLM_handler.py       # Groq integration
+│   ├── pdf_loader.py
+│   ├── text_chunker.py
+│   └── vector_store.py
+├── frontend/
+│   ├── src/
+│   │   ├── App.tsx          # Main React application
+│   │   ├── App.css          # Premium styling & dark mode
+│   │   └── main.tsx
+│   └── vite.config.ts
+├── .env                     # Your GROQ_API_KEY
+└── requirements.txt         # Python dependencies
 ```
 
 ---
 
-## How It Works
+## ⚙️ Setup — Step by Step
 
-```
-PDF Upload
-    ↓
-Extract Text (pypdf)
-    ↓
-Split into Chunks (LangChain — 500 chars, 50 overlap)
-    ↓
-Generate Embeddings (Google Gemini — gemini-embedding-001)
-    ↓
-Store in FAISS Vector Database
-    ↓
-User Question → Embed → Search FAISS → Top 4 Chunks
-    ↓
-Send Question + Chunks to Gemini (gemini-2.5-flash)
-    ↓
-Answer
-```
-
----
-
-## Setup — Step by Step
-
-### 1. Clone the Repository
-
+### 1. Clone & Environment
 ```bash
 git clone https://github.com/yourusername/rag-document-qa.git
 cd rag-document-qa
+python -m venv .venv
+source .venv/bin/activate  # Or .venv\Scripts\activate on Windows
 ```
 
-### 2. Create a Virtual Environment
-
-```bash
-python -m venv venv
-```
-
-Activate it:
-
-**Windows:**
-```bash
-venv\Scripts\activate
-```
-
-**Mac/Linux:**
-```bash
-source venv/bin/activate
-```
-
-### 3. Install Dependencies
-
+### 2. Install Dependencies
 ```bash
 pip install -r requirements.txt
+cd frontend && npm install
 ```
 
-### 4. Get Your Google Gemini API Key
-
-1. Go to [https://aistudio.google.com](https://aistudio.google.com)
-2. Sign in with your Google account
-3. Click **"Get API Key"** in the top left
-4. Click **"Create API Key"**
-5. Copy the key — it looks like: `AIzaSy...`
-
-> **Note:** The API is free to use with generous daily limits. No credit card required.
-
-### 5. Create Your .env File
-
-In the project root folder, create a file named exactly `.env` (with the dot):
-
+### 3. Configure Environment
+Create a `.env` file in the **root** directory:
+```env
+GROQ_API_KEY=your_groq_api_key_here
 ```
-GEMINI_API_KEY=your_api_key_here
-```
+Get your free key at [Groq Cloud Console](https://console.groq.com/).
 
-Replace `your_api_key_here` with the key you copied.
-
-**Example:**
-```
-GEMINI_API_KEY=AIzaSyAbCdEfGhIjKlMnOpQrStUvWxYz123456
-```
-
-> **Important:** Never share your `.env` file. Never push it to GitHub. It is already listed in `.gitignore` to keep it safe.
-
-### 6. Run the App
-
+### 4. Run the App
+**Start Backend:**
 ```bash
-streamlit run app.py
+cd backend
+python api.py
 ```
 
-The app will open in your browser at `http://localhost:8501`
-
----
-
-## How to Use
-
-1. Open the app in your browser
-2. Click **"Upload Document"** and select any PDF
-3. Type your question in the text box
-4. Click **"Search"**
-5. Wait a few seconds — the answer will appear below
-
----
-
-## Requirements
-
-- Python 3.9 or above
-- Google Gemini API key (free)
-- Internet connection (for Gemini API calls)
-
----
-
-## Dependencies
-
-```
-google-genai
-python-dotenv
-pypdf
-langchain-text-splitters
-faiss-cpu
-numpy
-streamlit
-```
-
-Install all at once:
+**Start Frontend:**
 ```bash
-pip install -r requirements.txt
+cd frontend
+npm run dev
 ```
 
 ---
 
-## Important Notes
+## 🧠 How the RAG Pipeline Works
 
-- The app answers **only from your uploaded document**
-- If the answer is not in the document, it will say: *"I don't know based on the provided document"*
-- Large PDFs may take longer to process (embeddings are generated for each chunk)
-- Your API key is stored locally in `.env` — it is never uploaded to GitHub
-
----
-
-## Built With
-
-| Tool | Purpose |
-|------|---------|
-| Google Gemini API | Embeddings + Answer Generation |
-| FAISS | Vector similarity search |
-| LangChain Text Splitters | Chunking documents |
-| pypdf | PDF text extraction |
-| Streamlit | Web UI |
-| python-dotenv | API key management |
+1. **PDF Upload:** Generates a unique UUID and extracts text.
+2. **Chunking:** Splits text into semantic chunks (500 chars).
+3. **Local Embedding:** Encodes chunks using `all-MiniLM-L6-v2` on your CPU.
+4. **Storage:** Saves the vector index to `storage/indices/{uuid}.faiss`.
+5. **Retrieval:** 
+   - **FAISS Search:** Grabs top 10 similar chunks.
+   - **Reranking:** Cross-Encoder re-scores those 10 chunks against the user question.
+   - **Top-K:** Sends only the top 2 absolute most relevant chunks to the LLM.
+6. **Generation:** Llama 3.3 70B generates a concise (1-2 sentence) answer strictly based on the context.
 
 ---
 
-## Author
-
-Built by Wasay — learning Gen AI development.
+## 📝 Author
+Built by Wasay — learning Production-Grade Gen AI development.
