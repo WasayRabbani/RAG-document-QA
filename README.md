@@ -1,112 +1,196 @@
-# PDF Brain 🧠 — Production-Ready RAG Document Q&A
+# 🧠 PDF Brain — Production-Grade RAG Document Q&A
 
-PDF Brain is a high-performance RAG (Retrieval-Augmented Generation) application that allows users to upload PDF documents and have laser-focused conversations with them. 
+PDF Brain is a high-performance, developer-friendly **Retrieval-Augmented Generation (RAG)** application. It allows users to upload complex PDF documents—such as research papers, legal agreements, and technical manuals—and conduct highly accurate, contextual Q&A with them.
 
-Unlike basic RAG apps, this system uses **local offline embeddings** and **cross-encoder reranking** to ensure zero rate limits and industry-leading accuracy.
+Unlike generic RAG prototypes, **PDF Brain** is built for production-grade speed and accuracy. It features **smart local/offline embeddings**, **keyword + semantic hybrid retrieval (BM25 + FAISS)**, and an offline **Cross-Encoder reranker** that double-checks candidates, ensuring the LLM only sees the absolute most relevant context.
 
 ---
 
-## 🚀 Key Features
+## 🚀 Architectural Highlights & Core Capabilities
 
-- **Local Embeddings (Offline):** Uses `all-MiniLM-L6-v2` locally via `sentence-transformers`. No Google Gemini API rate limits or costs for embeddings.
-- **Cross-Encoder Reranking:** Implements `ms-marco-MiniLM-L-6-v2` to double-check search results, ensuring the AI only sees the absolute most relevant context.
-- **Multi-User Session Support:** Every upload generates a unique UUID session, allowing multiple users to chat with different documents simultaneously without data collisions.
-- **FastAPI + React (Vite) Architecture:** Modern, decoupled full-stack architecture for production speed and scalability.
-- **Groq LLM Acceleration:** Powered by Llama 3.3 70B via Groq for near-instant responses.
+*   **⚡ Smart Cache Check (0ms Ingestion):** Generates an MD5 content-based checksum fingerprint of uploaded PDFs. If the document has already been processed, it bypasses the entire parser, chunking, and embedding pipelines, launching a session instantly.
+*   **📐 Hybrid Table & Math Extraction:** Uses a fast parser (`pypdf`) with built-in mathematical notation repair (e.g., rebuilding exponents like `10 19` into `10^19`), coupled with a layout-aware table parser (`pdfplumber`) to cleanly format tables into `[TABLE ROW]` entities.
+*   **🔗 Advanced Parent-Child Chunking:** Prose is split into Parent chunks (2000 chars) for LLM context, and Child chunks (500 chars) for precise vector searching. First-sentence headings or section titles are prepended as a context prefix to children, making numeric-only data fully searchable.
+*   **🔍 Multi-Stage Hybrid Search:**
+    1.  **HyDE (Hypothetical Document Embeddings):** Generates a hypothetical answer via Groq to improve bi-encoder query semantic mapping.
+    2.  **Semantic Search (FAISS):** Searches the local `all-MiniLM-L6-v2` dense vector index for the top 20 matches.
+    3.  **Keyword Search (BM25):** Performs a lexical search via the BM25 algorithm for another 20 candidates.
+    4.  **Local Cross-Encoder Reranking:** Takes unique candidates from both semantic and lexical streams, and reranks them against the *original* user question using an offline `ms-marco-MiniLM-L-6-v2` cross-encoder to select the absolute top 3.
+*   **📂 Multi-PDF Chat Support:** Supports loading and searching across multiple document sessions concurrently, aggregating and globally reranking candidates before generating a response.
+*   **🚀 Ultra-Fast LLM Inference:** Powered by Groq's API utilizing the high-speed **Llama 3.3 70B** model.
 
 ---
 
 ## 🛠️ Tech Stack
 
-- **Backend:** Python, FastAPI, Uvicorn
-- **Frontend:** React, TypeScript, Vite, Axios
-- **Vector DB:** FAISS (Facebook AI Similarity Search)
-- **Embeddings:** Sentence-Transformers (Local/Offline)
-- **Reranker:** Cross-Encoder (Local/Offline)
-- **LLM:** Groq (Llama 3.3 70B)
-- **Styling:** CSS3 with Dark/Light mode support & animations
+*   **Backend:** Python 3.10+, FastAPI, Uvicorn, LangChain (text splitters)
+*   **Frontend:** React 19, TypeScript, Vite, Axios, HSL CSS Custom Styling
+*   **Vector Engine:** FAISS (Facebook AI Similarity Search)
+*   **Local Embeddings:** Sentence-Transformers `all-MiniLM-L6-v2` (Offline)
+*   **Local Reranker:** Cross-Encoder `ms-marco-MiniLM-L-6-v2` (Offline)
+*   **LLM Generator:** Llama 3.3 70B (via Groq Cloud)
 
 ---
 
-## 📂 Project Structure
+## 📂 Repository Structure
 
-```
+```text
 rag-document-qa/
 ├── backend/
-│   ├── storage/             # FAISS indices and chunk pickles
-│   ├── uploads/             # Temporarily stored PDF files
-│   ├── api.py               # FastAPI server & endpoints
-│   ├── local_embedder.py    # Singleton for local embedding model
-│   ├── local_reranker.py    # Singleton for cross-encoder reranker
-│   ├── embedding_generator.py
-│   ├── query_handler.py     # Search logic with reranking
-│   ├── LLM_handler.py       # Groq integration
-│   ├── pdf_loader.py
-│   ├── text_chunker.py
-│   └── vector_store.py
+│   ├── storage/             # Ignored: Pickled chunks (.pkl) & FAISS indexes (.faiss)
+│   ├── uploads/             # Ignored: Locally stored PDF uploads
+│   ├── api.py               # FastAPI orchestrator exposing REST endpoints
+│   ├── pdf_loader.py        # PDF extraction & clean-up utilities
+│   ├── text_chunker.py      # Parent-child chunking & table handler
+│   ├── embedding_generator.py # Local batch vector encoder
+│   ├── local_embedder.py    # Singleton holding the SentenceTransformer
+│   ├── local_reranker.py    # Singleton holding the CrossEncoder model
+│   ├── query_handler.py     # HyDE + BM25 + FAISS + Reranking logic
+│   └── LLM_handler.py       # Context assembly & Groq inference
 ├── frontend/
 │   ├── src/
-│   │   ├── App.tsx          # Main React application
-│   │   ├── App.css          # Premium styling & dark mode
+│   │   ├── App.tsx          # Main React App & state manager
+│   │   ├── App.css          # Sleek premium styles & dark mode
 │   │   └── main.tsx
+│   ├── package.json
 │   └── vite.config.ts
-├── .env                     # Your GROQ_API_KEY
-└── requirements.txt         # Python dependencies
+├── .gitignore               # Excludes secrets, node_modules, .venv, and RAG caches
+├── requirements.txt         # Python dependencies
+└── README.md
 ```
 
 ---
 
-## ⚙️ Setup — Step by Step
+## ⚙️ Quick Start Setup Guide
 
-### 1. Clone & Environment
+### 📋 Prerequisites
+Ensure you have the following installed on your machine:
+*   [Python 3.10+](https://www.python.org/downloads/)
+*   [Node.js (v18+)](https://nodejs.org/)
+*   A free [Groq API Key](https://console.groq.com/)
+
+---
+
+### Step 1: Clone the Repository
 ```bash
-git clone https://github.com/yourusername/rag-document-qa.git
-cd rag-document-qa
-python -m venv .venv
-source .venv/bin/activate  # Or .venv\Scripts\activate on Windows
+git clone https://github.com/WasayRabbani/RAG-document-QA.git
+cd RAG-document-QA
 ```
 
-### 2. Install Dependencies
-```bash
-pip install -r requirements.txt
-cd frontend && npm install
-```
+---
 
-### 3. Configure Environment
-Create a `.env` file in the **root** directory:
+### Step 2: Set Up Backend Environment
+
+Create a `.env` file in the **root directory** of the repository:
 ```env
 GROQ_API_KEY=your_groq_api_key_here
 ```
-Get your free key at [Groq Cloud Console](https://console.groq.com/).
 
-### 4. Run the App
-**Start Backend:**
+#### Windows Configuration
+In the root directory, open PowerShell or Command Prompt:
+```powershell
+# Create Virtual Environment
+python -m venv .venv
+
+# Activate Virtual Environment
+.venv\Scripts\activate
+
+# Install Dependencies
+pip install -r requirements.txt
+```
+
+#### macOS / Linux Configuration
+In the root directory, open your terminal:
+```bash
+# Create Virtual Environment
+python3 -m venv .venv
+
+# Activate Virtual Environment
+source .venv/bin/activate
+
+# Install Dependencies
+pip install -r requirements.txt
+```
+
+---
+
+### Step 3: Set Up Frontend Environment
+Open a new shell or terminal in the root directory:
+```bash
+cd frontend
+npm install
+```
+
+---
+
+## 🏃 Running the Application
+
+### 1. Launch the Backend Server
+Make sure your Python virtual environment (`.venv`) is activated, then run:
 ```bash
 cd backend
 python api.py
 ```
+The FastAPI backend will start at: `http://localhost:8000`
+*(Note: On the very first run, it will automatically download the embedding and reranking models locally. This might take 1-2 minutes depending on your internet connection. Subsequent launches are instant!)*
 
-**Start Frontend:**
+### 2. Launch the Frontend Dev Server
+In another terminal, navigate to the frontend directory and start the dev server:
 ```bash
 cd frontend
 npm run dev
 ```
+The React frontend will spin up at: `http://localhost:5173` (or the port specified in your console). Open this URL in your web browser to start chatting with your PDFs!
 
 ---
 
-## 🧠 How the RAG Pipeline Works
+## 🧠 Behind the Scenes: How a Query Works
 
-1. **PDF Upload:** Generates a unique UUID and extracts text.
-2. **Chunking:** Splits text into semantic chunks (500 chars).
-3. **Local Embedding:** Encodes chunks using `all-MiniLM-L6-v2` on your CPU.
-4. **Storage:** Saves the vector index to `storage/indices/{uuid}.faiss`.
-5. **Retrieval:** 
-   - **FAISS Search:** Grabs top 10 similar chunks.
-   - **Reranking:** Cross-Encoder re-scores those 10 chunks against the user question.
-   - **Top-K:** Sends only the top 2 absolute most relevant chunks to the LLM.
-6. **Generation:** Llama 3.3 70B generates a concise (1-2 sentence) answer strictly based on the context.
+```text
+[User Question]
+       │
+       ▼
+┌──────────────┐
+│  HyDE Answer │ (LLM simulates a technical answer to enrich semantic relevance)
+└──────┬───────┘
+       │
+       ├──────────────────────────────────────┐
+       ▼                                      ▼
+┌──────────────┐                       ┌──────────────┐
+│ FAISS Search │ (Semantic match       │  BM25 Search │ (Lexical keyword
+│   (Top 20)   │  using local embeddings)│   (Top 20)   │  matching)
+└──────┬───────┘                       └──────┬───────┘
+       │                                      │
+       └──────────────────┬───────────────────┘
+                          ▼
+                  ┌──────────────┐
+                  │ Merge & Dup  │ (Unifies candidates into a unique list)
+                  └──────┬───────┘
+                         │
+                         ▼
+                  ┌──────────────┐
+                  │ Cross-Encoder│ (Local reranker evaluates true relevance
+                  │  Rerank Top3 │  between original question and chunks)
+                  └──────┬───────┘
+                         │
+                         ▼
+                  ┌──────────────┐
+                  │ Groq LLM Chat│ (Synthesizes final answer page-by-page
+                  │  Synthesis   │  strictly from context)
+                  └──────────────┘
+```
 
 ---
 
-## 📝 Author
-Built by Wasay — learning Production-Grade Gen AI development.
+## 🛠️ Troubleshooting & Support
+
+*   **Slow First PDF Upload / Timeout:** The backend downloads the local model files (approx. 400MB total) upon the very first upload or server launch. Please allow a few minutes for this download to complete. Subsequent runs will be lighting-fast and entirely offline.
+*   **GROQ_API_KEY Error:** Double-check that your `.env` file is in the **root** folder (not inside the `backend` folder) and contains `GROQ_API_KEY=gsk_...` with no spaces or quotation marks.
+*   **Port In Use:** If port `8000` or `5173` is busy, you can custom-assign them:
+    *   *Backend:* Change port in `api.py` at `uvicorn.run(app, port=8000)`.
+    *   *Frontend:* Vite will automatically assign another port, or you can specify one using `npm run dev -- --port XXXX`.
+
+---
+
+## 📝 Author & Acknowledgements
+Built by **Wasay** — developed as a comprehensive practice for production-grade, local hybrid-retrieval GenAI applications. Contributions, bug reports, and suggestions are welcome!
