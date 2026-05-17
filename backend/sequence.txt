@@ -1,0 +1,3 @@
+pdf_loader → text_chunker → embedding_generator → vector_store
+                                                        ↓
+query → local_embedder → vector_store → local_reranker → LLM_handler → api

@@ -126,3 +126,9 @@ class PDFLoader:
         except Exception as e:
             logger.error(f"Failed to load PDF {self.pdf}: {e}")
             raise e
+
+
+
+
+""" The main function of this file is to upload A PDF to app and we have to extract all of the data from this PDF so for that purpose we are using libraries Pypdf and PDF Plumber pypdf is used for text because it is exceptionally fast and not good with tables on the other hand we are using pipe lumber for pages that are having tables because it is good with tables but it is slow So first thing is when we extract all of the data we use by PDF and if on any page we encounter a table we switch to PDF plumber once the data has been retrieved clean the data in Cleaning we clean math functions and some scientific notations Then we use another function that's main purpose is to check page hash table if page has a table then we switch to pipe number and another function is used to make sure that the data extracted from the table has its semantic meaning restored Then we have the main function that loads my whole PDF
+"""

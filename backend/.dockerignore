@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.git/
+.gitignore
+storage/indices/*
+storage/chunks/*
+uploads/*
+.env
+debug_chunks.py
