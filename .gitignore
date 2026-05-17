@@ -1,3 +1,7 @@
 .env
 .venv/
 __pycache__/
+
+# RAG runtime uploads and vector/chunk storage caches
+backend/uploads/
+backend/storage/
