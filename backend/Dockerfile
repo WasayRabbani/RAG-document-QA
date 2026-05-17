@@ -26,4 +26,4 @@ RUN mkdir -p /code/storage/indices /code/storage/chunks /code/uploads
 EXPOSE 7860
 
 # Start the FastAPI application with Uvicorn on port 7860
-CMD ["uvicorn", "api.py:app", "--host", "0.0.0.0", "--port", "7860"]
+CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "7860"]
