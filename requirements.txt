@@ -1,8 +1,8 @@
 python-dotenv
 pypdf
+pdfplumber
 langchain-text-splitters
 faiss-cpu
-streamlit
 numpy
 openai
 fastapi
@@ -10,3 +10,4 @@ uvicorn
 python-multipart
 sentence-transformers
 torch
+rank-bm25

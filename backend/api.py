@@ -44,7 +44,8 @@ for folder in [UPLOAD_DIR, INDICES_DIR, CHUNKS_DIR]:
     folder.mkdir(parents=True, exist_ok=True)
 
 class QueryRequest(BaseModel):
-    session_id: str = Field(..., description="The unique session ID (content hash) of the document")
+    session_id: str = Field(default="", description="Single session ID (backward compatible)")
+    session_ids: list[str] = Field(default=[], description="List of session IDs for multi-PDF mode")
     question: str = Field(..., min_length=1, description="The user's question")
 
 @app.get("/health")
@@ -114,37 +115,69 @@ async def upload_pdf(file: UploadFile = File(...)):
 
 @app.post("/chat")
 async def chat(request: QueryRequest):
-    """Answers a question based on a previously uploaded PDF session."""
-    index_file = str(INDICES_DIR / f"{request.session_id}.faiss")
-    chunks_file = str(CHUNKS_DIR / f"{request.session_id}.pkl")
+    """Answers a question by searching across one or more uploaded PDFs."""
     
-    # Load vector index from disk
-    whole_index, chunks = VectorStore.load_from_disk(index_file, chunks_file)
+    # Build list of session IDs (support both single and multi mode)
+    ids = request.session_ids if request.session_ids else [request.session_id]
+    ids = [sid for sid in ids if sid]  # Remove empty strings
     
-    if whole_index is None:
-        raise HTTPException(status_code=404, detail="Document session not found or has expired.")
+    if not ids:
+        raise HTTPException(status_code=400, detail="No session IDs provided.")
+    
+    # Collect chunks from ALL documents
+    all_chunks = []
+    all_indices = []
+    
+    for sid in ids:
+        index_file = str(INDICES_DIR / f"{sid}.faiss")
+        chunks_file = str(CHUNKS_DIR / f"{sid}.pkl")
+        
+        whole_index, chunks = VectorStore.load_from_disk(index_file, chunks_file)
+        
+        if whole_index is not None:
+            all_indices.append((whole_index, chunks))
+        else:
+            logger.warning(f"Session {sid} not found, skipping.")
+    
+    if not all_indices:
+        raise HTTPException(status_code=404, detail="No valid document sessions found.")
     
     try:
-        # 1. Perform semantic search and reranking
-        qh = QueryHandler(question=request.question, container=whole_index, chunks=chunks, threshold=2.0)
-        content = qh.get_results()
+        # Search each index separately and collect all candidate chunks
+        all_candidates = []
         
-        if not content:
-            return {"answer": "I don't know based on the provided document.", "sources": []}
+        for whole_index, chunks in all_indices:
+            qh = QueryHandler(
+                question=request.question,
+                container=whole_index,
+                chunks=chunks,
+                threshold=2.0
+            )
+            results = qh.get_results()
+            all_candidates.extend(results)
         
-        # 2. Generate final answer with LLM
-        llm = LLMHandler(question=request.question, chunks=content)
+        if not all_candidates:
+            return {"answer": "I don't know based on the provided documents.", "sources": []}
+        
+        # If multi-PDF: re-sort all candidates by rerank score globally
+        if len(all_indices) > 1:
+            all_candidates.sort(key=lambda x: x.get('rerank_score', 0), reverse=True)
+            all_candidates = all_candidates[:3]  # Keep top 3 globally
+        
+        # Generate final answer with LLM
+        llm = LLMHandler(question=request.question, chunks=all_candidates)
         answer = llm.make_chatbot()
         
-        # 3. Extract source pages
-        sources = sorted(list(set([chunk['page'] for chunk in content])))
+        # Extract source pages
+        sources = sorted(list(set([chunk['page'] for chunk in all_candidates])))
         
         return {"answer": answer, "sources": sources}
         
     except Exception as e:
-        logger.error(f"Chat error for session {request.session_id}: {e}")
+        logger.error(f"Chat error: {e}")
         raise HTTPException(status_code=500, detail="Failed to generate response.")
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+

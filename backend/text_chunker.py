@@ -1,9 +1,11 @@
 """
 Smart Chunking Strategy:
-1. Scan each page for "table-like" regions (rows of numbers/short columns)
-2. Extract those as a single preserved chunk with a clear label
-3. Run regular RecursiveCharacterTextSplitter on remaining prose text
-4. Combine both into the final chunk list
+1. Detect [TABLE ROW] entries (from pdf_loader's pdfplumber) → each as its own chunk
+2. Everything else goes through Parent-Child chunking:
+   - Parent: 2000 chars (sent to LLM for full context)
+   - Child: 500 chars (used for precise FAISS search)
+   - Each child gets a CONTEXT PREFIX from its parent's first sentence
+     so even pure-number children are searchable
 """
 
 import re
@@ -11,79 +13,93 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 class TextChunker:
     def __init__(self, extracted_pages):
-        # extracted_pages is a list of {"text": ..., "page": ...}
         self.pages = extracted_pages
-    
-    def _is_table_line(self, line: str) -> bool:
-        """
-        Heuristic: A line is "table-like" if it contains multiple
-        numeric values or tab/multi-space separated short tokens.
-        """
-        stripped = line.strip()
-        if not stripped:
-            return False
-        # Count numeric tokens (integers, floats, percentages)
-        numeric_tokens = re.findall(r'\b\d+\.?\d*\b', stripped)
-        total_tokens = stripped.split()
-        # If >30% of tokens are numbers AND line has >= 3 tokens, it's table-like
-        if len(total_tokens) >= 3 and len(numeric_tokens) >= 2:
-            return True
-        return False
 
-    def _extract_tables(self, text: str, page_num: int):
+    def _extract_context_prefix(self, parent_text: str) -> str:
         """
-        Walk through the lines of a page and group consecutive
-        table-like lines into a single preserved chunk.
-        Returns (table_chunks, remaining_text).
+        Extract the first meaningful sentence/heading from a parent chunk.
+        This gets prepended to every child so numeric-only children
+        become searchable (e.g., "Table 3: Variations on the Transformer...").
         """
-        lines = text.split('\n')
-        table_chunks = []
-        remaining_lines = []
+        # Try to get the first sentence (up to first period followed by space)
+        match = re.match(r'^(.+?\.)\s', parent_text, re.DOTALL)
+        if match:
+            prefix = match.group(1).strip()
+            # Keep it short — max 120 chars
+            if len(prefix) > 120:
+                prefix = prefix[:120] + "..."
+            return f"[Context: {prefix}] "
         
-        buffer = []  # accumulate consecutive table lines
+        # Fallback: first line
+        first_line = parent_text.split('\n')[0].strip()
+        if first_line and len(first_line) > 5:
+            if len(first_line) > 120:
+                first_line = first_line[:120] + "..."
+            return f"[Context: {first_line}] "
         
-        for line in lines:
-            if self._is_table_line(line):
-                buffer.append(line)
-            else:
-                if buffer:
-                    # We have a complete table block — save it
-                    table_text = "[TABLE DATA]\n" + "\n".join(buffer)
-                    table_chunks.append({"text": table_text, "page": page_num})
-                    buffer = []
-                remaining_lines.append(line)
-        
-        # Don't forget the last buffer
-        if buffer:
-            table_text = "[TABLE DATA]\n" + "\n".join(buffer)
-            table_chunks.append({"text": table_text, "page": page_num})
-        
-        return table_chunks, "\n".join(remaining_lines)
+        return ""
 
     def chunking(self):
-        splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,
+        # PARENT splitter: large chunks for rich context
+        parent_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=2000,
             chunk_overlap=200,
             separators=["\n\n", "\n", ". ", "! ", "? ", " ", ""],
             length_function=len
         )
-        
+
+        # CHILD splitter: small chunks for precise search
+        child_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=500,
+            chunk_overlap=50,
+            separators=["\n\n", "\n", ". ", "! ", "? ", " ", ""],
+            length_function=len
+        )
+
         final_chunks = []
-        
+
         for page in self.pages:
-            # 1. Extract table blocks first (preserved as single chunks)
-            table_chunks, remaining_text = self._extract_tables(
-                page["text"], page["page"]
-            )
-            final_chunks.extend(table_chunks)
-            
-            # 2. Chunk the remaining prose text normally
+            text = page["text"]
+            page_num = page["page"]
+
+            # 1. Extract pre-formatted [TABLE ROW] lines (from pdfplumber)
+            lines = text.split('\n')
+            table_rows = []
+            prose_lines = []
+
+            for line in lines:
+                if line.strip().startswith("[TABLE ROW]"):
+                    table_rows.append(line.strip())
+                else:
+                    prose_lines.append(line)
+
+            # Each [TABLE ROW] becomes its own self-contained chunk
+            for row in table_rows:
+                final_chunks.append({
+                    "text": row,
+                    "parent_text": row,
+                    "page": page_num
+                })
+
+            # 2. Parent-Child chunking for ALL remaining text
+            remaining_text = "\n".join(prose_lines)
             if remaining_text.strip():
-                prose_chunks = splitter.split_text(remaining_text)
-                for chunk in prose_chunks:
-                    final_chunks.append({
-                        "text": chunk,
-                        "page": page["page"]
-                    })
-                
+                parent_chunks = parent_splitter.split_text(remaining_text)
+
+                for parent_text in parent_chunks:
+                    # Extract a context prefix from the parent's first sentence
+                    context_prefix = self._extract_context_prefix(parent_text)
+                    children = child_splitter.split_text(parent_text)
+
+                    for child_text in children:
+                        # Prepend the context prefix to the child's search text
+                        # so pure-number chunks become findable
+                        searchable_text = context_prefix + child_text
+
+                        final_chunks.append({
+                            "text": searchable_text,  # Used for SEARCH (has context)
+                            "parent_text": parent_text,  # Used for LLM (full context)
+                            "page": page_num
+                        })
+
         return final_chunks

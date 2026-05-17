@@ -22,16 +22,23 @@ class LLMHandler:
         self.model = "llama-3.3-70b-versatile"
 
     def make_chatbot(self):
-        system_instruction = """You are a helpful assistant that answers questions strictly based on the provided context from a document.
+        system_instruction = """You are a technical document expert. Answer questions strictly using the provided context.
         Rules:
-        1. Answer ONLY from the provided context. If the answer is not in the context, say: "I don't know based on the provided document."
-        2. Give extremely concise answers. Keep your response to 1-2 sentences maximum, straight to the point. Do not add fluff or introductory phrases.
-        3. At the end of your answer, you MUST list the page numbers used as sources (e.g., Sources: Page 1, Page 5)."""
+        1. Answer ONLY from the provided context. If not found, say: "I don't know based on the provided document."
+        2. Give extremely concise answers (1-2 sentences max).
+        3. TABLES & MATH: Pay close attention to numeric rows. If you see something like "2.3 x 10^19" or "2.3 ? 10 19", interpret it as scientific notation for training costs/FLOPs.
+        4. List page numbers used as sources at the end (e.g., Sources: Page 7)."""
 
         # Format chunks with page numbers for the LLM
+        # Use parent_text (larger context) if available, otherwise fall back to text
         formatted_context = ""
+        seen_parents = set()  # Avoid sending duplicate parent chunks
         for chunk in self.chunks:
-            formatted_context += f"\n--- Page {chunk['page']} ---\n{chunk['text']}\n"
+            context = chunk.get('parent_text', chunk['text'])
+            # Deduplicate: if two children share the same parent, only send it once
+            if context not in seen_parents:
+                formatted_context += f"\n--- Page {chunk['page']} ---\n{context}\n"
+                seen_parents.add(context)
 
         messages = [
             {"role": "system", "content": system_instruction},
