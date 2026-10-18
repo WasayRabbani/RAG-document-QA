@@ -5,3 +5,13 @@ __pycache__/
 # RAG runtime uploads and vector/chunk storage caches
 backend/uploads/
 backend/storage/
+
+.env
+backend/.env
+venv/
+.venv/
+__pycache__/
+backend/uploads/
+backend/storage/
+node_modules/
+*.log

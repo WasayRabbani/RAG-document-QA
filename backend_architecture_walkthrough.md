@@ -57,13 +57,13 @@ Here is an A-to-Z breakdown of every Python module in the [backend](file:///d:/C
 ### 8. [query_handler.py](file:///d:/Coding%20Stuff/Freelancing/RAG_App/backend/query_handler.py) — Hybrid Retrieval Engine
 - **Role:** The core search engine, using **HyDE (Hypothetical Document Embeddings)**, **Hybrid Search (FAISS + BM25)**, and **Cross-Encoder Reranking**.
 - **Key Functions:**
-  - `_generate_hypothetical_answer()`: Generates a short, mock answer to the user's question via Groq's Llama 3.3 model. This is the **HyDE** strategy, improving semantic matching.
+  - `_generate_hypothetical_answer()`: Generates a short, mock answer to the user's question via the configured Groq model. This is the **HyDE** strategy, improving semantic matching.
   - `_semantic_search()`: Embeds the HyDE answer and performs L2 distance search on FAISS (top 20 candidates).
   - `_bm25_search()`: Uses exact keyword matching via BM25 (`rank_bm25`) to get another top 20 candidates.
   - `get_results()`: Merges and deduplicates candidate indices, then runs them through `local_reranker` against the **original user question** to re-score them. Returns the top 3 absolute most relevant chunks.
 
 ### 9. [LLM_handler.py](file:///d:/Coding%20Stuff/Freelancing/RAG_App/backend/LLM_handler.py) — Generator
-- **Role:** Formulates the final prompt, interfaces with the Groq Llama 3.3 70B model, and returns the answer.
+- **Role:** Formulates the final prompt, interfaces with the configured Groq model, and returns the answer.
 - **Key Functions:**
   - `make_chatbot()`: Formats the retrieved chunks (deduplicated by `parent_text` to avoid context window clutter) with their source page headers, sets rigorous constraints (1-2 sentences, answer only from context), calls the Groq OpenAI-compatible client, and retrieves the text.
 
@@ -178,7 +178,7 @@ sequenceDiagram
     API->>LLM: Instantiate LLMHandler(question, top_chunks)
     LLM->>LLM: Deduplicate parent context chunks
     LLM->>LLM: Format prompt with clean page numbers
-    LLM->>LLM: Call Groq Llama-3.3-70b-versatile
+    LLM->>LLM: Call configured Groq model
     LLM-->>API: Return concise, referenced answer (e.g., "Sources: Page 2, 5")
     
     API-->>User: Return {"answer": "...", "sources": [2, 5]}

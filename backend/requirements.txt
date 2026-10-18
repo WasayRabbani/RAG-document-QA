@@ -1,0 +1,14 @@
+python-dotenv
+pypdf
+pdfplumber
+langchain-text-splitters
+faiss-cpu
+numpy
+openai
+fastapi
+pydantic
+uvicorn
+python-multipart
+fastembed
+flashrank
+rank-bm25

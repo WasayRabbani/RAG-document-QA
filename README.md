@@ -2,7 +2,7 @@
 
 PDF Brain is a high-performance, developer-friendly **Retrieval-Augmented Generation (RAG)** application. It allows users to upload complex PDF documents—such as research papers, legal agreements, and technical manuals—and conduct highly accurate, contextual Q&A with them.
 
-Unlike generic RAG prototypes, **PDF Brain** is built for production-grade speed and accuracy. It features **smart local/offline embeddings**, **keyword + semantic hybrid retrieval (BM25 + FAISS)**, and an offline **Cross-Encoder reranker** that double-checks candidates, ensuring the LLM only sees the absolute most relevant context.
+Unlike generic RAG prototypes, **PDF Brain** combines local embeddings, keyword + semantic hybrid retrieval (BM25 + FAISS), and a compact offline cross-encoder reranker.
 
 ---
 
@@ -13,11 +13,11 @@ Unlike generic RAG prototypes, **PDF Brain** is built for production-grade speed
 *   **🔗 Advanced Parent-Child Chunking:** Prose is split into Parent chunks (2000 chars) for LLM context, and Child chunks (500 chars) for precise vector searching. First-sentence headings or section titles are prepended as a context prefix to children, making numeric-only data fully searchable.
 *   **🔍 Multi-Stage Hybrid Search:**
     1.  **HyDE (Hypothetical Document Embeddings):** Generates a hypothetical answer via Groq to improve bi-encoder query semantic mapping.
-    2.  **Semantic Search (FAISS):** Searches the local `all-MiniLM-L6-v2` dense vector index for the top 20 matches.
+    2.  **Semantic Search (FAISS):** Searches a local `BAAI/bge-small-en-v1.5` dense vector index for the top 20 matches using FastEmbed/ONNX Runtime.
     3.  **Keyword Search (BM25):** Performs a lexical search via the BM25 algorithm for another 20 candidates.
-    4.  **Local Cross-Encoder Reranking:** Takes unique candidates from both semantic and lexical streams, and reranks them against the *original* user question using an offline `ms-marco-MiniLM-L-6-v2` cross-encoder to select the absolute top 3.
+    4.  **Local Cross-Encoder Reranking:** Reranks candidates against the original question with FlashRank's compact `ms-marco-TinyBERT-L-2-v2` model, then selects the top 3.
 *   **📂 Multi-PDF Chat Support:** Supports loading and searching across multiple document sessions concurrently, aggregating and globally reranking candidates before generating a response.
-*   **🚀 Ultra-Fast LLM Inference:** Powered by Groq's API utilizing the high-speed **Llama 3.3 70B** model.
+*   **🚀 Ultra-Fast LLM Inference:** Powered by Groq's API utilizing **OpenAI GPT-OSS 20B** by default (`GROQ_MODEL` can override it).
 
 ---
 
@@ -26,9 +26,9 @@ Unlike generic RAG prototypes, **PDF Brain** is built for production-grade speed
 *   **Backend:** Python 3.10+, FastAPI, Uvicorn, LangChain (text splitters)
 *   **Frontend:** React 19, TypeScript, Vite, Axios, HSL CSS Custom Styling
 *   **Vector Engine:** FAISS (Facebook AI Similarity Search)
-*   **Local Embeddings:** Sentence-Transformers `all-MiniLM-L6-v2` (Offline)
-*   **Local Reranker:** Cross-Encoder `ms-marco-MiniLM-L-6-v2` (Offline)
-*   **LLM Generator:** Llama 3.3 70B (via Groq Cloud)
+*   **Local Embeddings:** FastEmbed/ONNX Runtime with `BAAI/bge-small-en-v1.5` (Offline)
+*   **Local Reranker:** FlashRank with `ms-marco-TinyBERT-L-2-v2` (Offline)
+*   **LLM Generator:** OpenAI GPT-OSS 20B by default (via Groq Cloud)
 
 ---
 
@@ -44,7 +44,7 @@ rag-document-qa/
 │   ├── text_chunker.py      # Parent-child chunking & table handler
 │   ├── embedding_generator.py # Local batch vector encoder
 │   ├── local_embedder.py    # Singleton holding the SentenceTransformer
-│   ├── local_reranker.py    # Singleton holding the CrossEncoder model
+│   ├── local_reranker.py    # Singleton holding the FlashRank model
 │   ├── query_handler.py     # HyDE + BM25 + FAISS + Reranking logic
 │   └── LLM_handler.py       # Context assembly & Groq inference
 ├── frontend/
@@ -55,7 +55,7 @@ rag-document-qa/
 │   ├── package.json
 │   └── vite.config.ts
 ├── .gitignore               # Excludes secrets, node_modules, .venv, and RAG caches
-├── requirements.txt         # Python dependencies
+├── backend/requirements.txt # Python dependencies
 └── README.md
 ```
 
@@ -84,6 +84,8 @@ cd RAG-document-QA
 Create a `.env` file in the **root directory** of the repository:
 ```env
 GROQ_API_KEY=your_groq_api_key_here
+# Optional; defaults to openai/gpt-oss-20b
+GROQ_MODEL=openai/gpt-oss-20b
 ```
 
 #### Windows Configuration
@@ -96,7 +98,7 @@ python -m venv .venv
 .venv\Scripts\activate
 
 # Install Dependencies
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
 ```
 
 #### macOS / Linux Configuration
@@ -109,7 +111,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 
 # Install Dependencies
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
 ```
 
 ---
@@ -132,7 +134,7 @@ cd backend
 python api.py
 ```
 The FastAPI backend will start at: `http://localhost:8000`
-*(Note: On the very first run, it will automatically download the embedding and reranking models locally. This might take 1-2 minutes depending on your internet connection. Subsequent launches are instant!)*
+*(Note: On the first run, it downloads the compact embedding and reranking models locally. This requires internet access; subsequent runs use the cached models.)*
 
 ### 2. Launch the Frontend Dev Server
 In another terminal, navigate to the frontend directory and start the dev server:

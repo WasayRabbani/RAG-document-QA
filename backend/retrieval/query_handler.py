@@ -6,20 +6,18 @@ Search Strategy:
 2. Semantic Search (FAISS): Embed the HyDE answer, find top 20 similar chunks
 3. Keyword Search (BM25): Find top 20 chunks by exact keyword matching
 4. Merge: Combine results from both (deduplicated)
-5. Rerank: CrossEncoder scores all candidates against the ORIGINAL question
+5. Rerank: FlashRank scores all candidates against the ORIGINAL question
 6. Return: Top 3 most relevant chunks
 """
 
-import os
 import numpy as np
 import faiss
 import logging
-from openai import OpenAI
-from dotenv import load_dotenv
 from rank_bm25 import BM25Okapi
-from local_embedder import get_embedder
+from flashrank import RerankRequest
+from generation.groq_client import GROQ_MODEL, create_groq_client
+from retrieval.local_embedder import get_embedder
 
-load_dotenv()
 logger = logging.getLogger(__name__)
 
 class QueryHandler:
@@ -34,20 +32,17 @@ class QueryHandler:
     def _generate_hypothetical_answer(self) -> str:
         """HyDE: Generate a fake answer to improve semantic search."""
         try:
-            api_key = os.getenv("GROQ_API_KEY")
-            if not api_key:
-                return self.query
-
-            client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
+            client = create_groq_client()
             
             response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+                model=GROQ_MODEL,
                 messages=[
                     {"role": "system", "content": "You are a technical document expert. Given a question, write a short 2-3 sentence passage that would directly answer it. Write it as if you are quoting from the source document. Do not say 'I don't know'. Just write a plausible answer."},
                     {"role": "user", "content": self.query}
                 ],
                 temperature=0,
-                max_tokens=150
+                max_completion_tokens=256,
+                reasoning_effort="low",
             )
             
             hypothetical = response.choices[0].message.content
@@ -121,17 +116,23 @@ class QueryHandler:
         if not candidate_chunks:
             return []
 
-        # Step 5: Rerank ALL candidates with CrossEncoder (using ORIGINAL question)
-        from local_reranker import get_reranker
+        # Step 5: Rerank ALL candidates with FlashRank (using ORIGINAL question)
+        from retrieval.local_reranker import get_reranker
         reranker = get_reranker()
         
-        pairs = [[self.query, chunk['text']] for chunk in candidate_chunks]
-        scores = reranker.predict(pairs)
-        
-        for i, chunk in enumerate(candidate_chunks):
-            chunk['rerank_score'] = float(scores[i])
-        
-        candidate_chunks.sort(key=lambda x: x['rerank_score'], reverse=True)
+        passages = [
+            {"id": index, "text": chunk["text"]}
+            for index, chunk in enumerate(candidate_chunks)
+        ]
+        reranked = reranker.rerank(
+            RerankRequest(query=self.query, passages=passages)
+        )
+        original_candidates = candidate_chunks
+        candidate_chunks = []
+        for result in reranked:
+            chunk = original_candidates[result["id"]]
+            chunk["rerank_score"] = float(result["score"])
+            candidate_chunks.append(chunk)
         
         # Log top 5 for debugging
         for chunk in candidate_chunks[:5]:

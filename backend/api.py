@@ -6,13 +6,15 @@ import hashlib
 from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from openai import APIConnectionError, APIStatusError
 from pydantic import BaseModel, Field
-from pdf_loader import PDFLoader
-from text_chunker import TextChunker
-from embedding_generator import EmbeddingGenerator
-from vector_store import VectorStore
-from query_handler import QueryHandler
-from LLM_handler import LLMHandler
+from ingestion.pdf_loader import PDFLoader
+from ingestion.text_chunker import TextChunker
+from retrieval.embedding_generator import EmbeddingGenerator
+from retrieval.local_embedder import MODEL_NAME
+from retrieval.vector_store import VectorStore
+from retrieval.query_handler import QueryHandler
+from generation.LLM_handler import LLMHandler
 
 # --- LOGGING CONFIG ---
 logging.basicConfig(
@@ -61,7 +63,9 @@ async def upload_pdf(file: UploadFile = File(...)):
     
     # Read file content to generate a hash (fingerprint)
     content = await file.read()
-    session_id = hashlib.md5(content).hexdigest()
+    # Include the embedding model in the cache key so indexes made by a different
+    # model are never queried with incompatible embeddings.
+    session_id = hashlib.md5(content + MODEL_NAME.encode("utf-8")).hexdigest()
     
     # Reset file pointer for shutil
     await file.seek(0)
@@ -173,11 +177,22 @@ async def chat(request: QueryRequest):
         
         return {"answer": answer, "sources": sources}
         
+    except APIStatusError as e:
+        logger.exception("Groq API returned an error while handling chat.")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Groq API returned HTTP {e.status_code}: {e.message}",
+        ) from e
+    except APIConnectionError as e:
+        logger.exception("Could not connect to Groq API while handling chat.")
+        raise HTTPException(
+            status_code=502,
+            detail="Could not connect to Groq API. Check backend network connectivity and try again.",
+        ) from e
     except Exception as e:
-        logger.error(f"Chat error: {e}")
-        raise HTTPException(status_code=500, detail="Failed to generate response.")
+        logger.exception("Chat error.")
+        raise HTTPException(status_code=500, detail="Failed to generate response.") from e
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-

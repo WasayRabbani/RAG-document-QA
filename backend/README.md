@@ -16,4 +16,5 @@ This is the containerized FastAPI backend for the production RAG application, de
 - **SDK**: Docker
 - **Port**: 7860 (Hugging Face Spaces Default)
 - **Engine**: FastAPI + Uvicorn
-- **Dependencies**: sentence-transformers, FAISS, pdfplumber, cross-encoder, rank-bm25, Groq API
+- **Dependencies**: FastEmbed/ONNX Runtime, FlashRank, FAISS, pdfplumber, rank-bm25, Groq API
+- **Model footprint**: Uses the compact `BAAI/bge-small-en-v1.5` embedding model and FlashRank's `ms-marco-TinyBERT-L-2-v2` reranker; neither requires PyTorch.
