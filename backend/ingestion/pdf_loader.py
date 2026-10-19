@@ -9,6 +9,8 @@ import re
 from pypdf import PdfReader
 import logging
 
+# logging is python's built-in logging module, which allows us to log messages to the console or a file. We can set different logging levels (DEBUG, INFO, WARNING, ERROR, CRITICAL) to control the verbosity of the output. In this code, we create a logger instance for the PDFLoader class to log messages related to PDF loading and processing.
+
 logger = logging.getLogger(__name__)
 
 class PDFLoader:
@@ -30,6 +32,11 @@ class PDFLoader:
         }
         for old, new in replacements.items():
             text = text.replace(old, new)
+        
+
+        # so when i used .items here, it makes a tuple of key and value, so we can use that to replace the old character with the new one in the text. 
+
+
         
         # Fix scientific notation: "10 19" or "10?19" → "10^19"
         text = re.sub(r'(\d)\s*[·\?\*×]\s*10\s*(\d{2})', r'\1 x 10^\2', text)
