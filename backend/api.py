@@ -6,6 +6,7 @@ import hashlib
 from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from openai import APIConnectionError, APIStatusError
 from pydantic import BaseModel, Field
 from ingestion.pdf_loader import PDFLoader
@@ -192,6 +193,10 @@ async def chat(request: QueryRequest):
     except Exception as e:
         logger.exception("Chat error.")
         raise HTTPException(status_code=500, detail="Failed to generate response.") from e
+
+FRONTEND_DIST_DIR = BASE_DIR.parent / "frontend" / "dist"
+if FRONTEND_DIST_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=FRONTEND_DIST_DIR, html=True), name="frontend")
 
 if __name__ == "__main__":
     import uvicorn

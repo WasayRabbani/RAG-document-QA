@@ -1,198 +1,184 @@
-# 🧠 PDF Brain — Production-Grade RAG Document Q&A
-
-PDF Brain is a high-performance, developer-friendly **Retrieval-Augmented Generation (RAG)** application. It allows users to upload complex PDF documents—such as research papers, legal agreements, and technical manuals—and conduct highly accurate, contextual Q&A with them.
-
-Unlike generic RAG prototypes, **PDF Brain** combines local embeddings, keyword + semantic hybrid retrieval (BM25 + FAISS), and a compact offline cross-encoder reranker.
-
+---
+title: PDF Brain
+sdk: docker
+app_port: 7860
 ---
 
-## 🚀 Architectural Highlights & Core Capabilities
+# PDF Brain
 
-*   **⚡ Smart Cache Check (0ms Ingestion):** Generates an MD5 content-based checksum fingerprint of uploaded PDFs. If the document has already been processed, it bypasses the entire parser, chunking, and embedding pipelines, launching a session instantly.
-*   **📐 Hybrid Table & Math Extraction:** Uses a fast parser (`pypdf`) with built-in mathematical notation repair (e.g., rebuilding exponents like `10 19` into `10^19`), coupled with a layout-aware table parser (`pdfplumber`) to cleanly format tables into `[TABLE ROW]` entities.
-*   **🔗 Advanced Parent-Child Chunking:** Prose is split into Parent chunks (2000 chars) for LLM context, and Child chunks (500 chars) for precise vector searching. First-sentence headings or section titles are prepended as a context prefix to children, making numeric-only data fully searchable.
-*   **🔍 Multi-Stage Hybrid Search:**
-    1.  **HyDE (Hypothetical Document Embeddings):** Generates a hypothetical answer via Groq to improve bi-encoder query semantic mapping.
-    2.  **Semantic Search (FAISS):** Searches a local `BAAI/bge-small-en-v1.5` dense vector index for the top 20 matches using FastEmbed/ONNX Runtime.
-    3.  **Keyword Search (BM25):** Performs a lexical search via the BM25 algorithm for another 20 candidates.
-    4.  **Local Cross-Encoder Reranking:** Reranks candidates against the original question with FlashRank's compact `ms-marco-TinyBERT-L-2-v2` model, then selects the top 3.
-*   **📂 Multi-PDF Chat Support:** Supports loading and searching across multiple document sessions concurrently, aggregating and globally reranking candidates before generating a response.
-*   **🚀 Ultra-Fast LLM Inference:** Powered by Groq's API utilizing **OpenAI GPT-OSS 20B** by default (`GROQ_MODEL` can override it).
+**Ask questions across your PDFs and get concise answers grounded in the documents, with page references.**
 
----
+PDF Brain is a full-stack Retrieval-Augmented Generation (RAG) application. It turns uploaded PDFs into searchable, page-aware content, retrieves relevant passages for a question, and uses a language model to compose an answer from that evidence.
 
-## 🛠️ Tech Stack
+## Project highlights
 
-*   **Backend:** Python 3.10+, FastAPI, Uvicorn, LangChain (text splitters)
-*   **Frontend:** React 19, TypeScript, Vite, Axios, HSL CSS Custom Styling
-*   **Vector Engine:** FAISS (Facebook AI Similarity Search)
-*   **Local Embeddings:** FastEmbed/ONNX Runtime with `BAAI/bge-small-en-v1.5` (Offline)
-*   **Local Reranker:** FlashRank with `ms-marco-TinyBERT-L-2-v2` (Offline)
-*   **LLM Generator:** OpenAI GPT-OSS 20B by default (via Groq Cloud)
+- Built an end-to-end document question-answering application with a React/TypeScript frontend and a Python/FastAPI backend.
+- Designed a PDF ingestion pipeline that combines `pypdf` text extraction with conditional `pdfplumber` table extraction, repairs selected technical notation, and preserves page metadata.
+- Implemented parent/child chunking, local text embeddings, FAISS vector search, BM25 keyword retrieval, and local cross-encoder reranking.
+- Added content-based document caching and multi-document chat so previously indexed PDFs can be reused and questions can search across the currently selected documents.
+- Integrated Groq-hosted LLM calls for query expansion and grounded answer generation.
 
----
-
-## 📂 Repository Structure
+## How it works
 
 ```text
-rag-document-qa/
-├── backend/
-│   ├── storage/             # Ignored: Pickled chunks (.pkl) & FAISS indexes (.faiss)
-│   ├── uploads/             # Ignored: Locally stored PDF uploads
-│   ├── api.py               # FastAPI orchestrator exposing REST endpoints
-│   ├── pdf_loader.py        # PDF extraction & clean-up utilities
-│   ├── text_chunker.py      # Parent-child chunking & table handler
-│   ├── embedding_generator.py # Local batch vector encoder
-│   ├── local_embedder.py    # Singleton holding the SentenceTransformer
-│   ├── local_reranker.py    # Singleton holding the FlashRank model
-│   ├── query_handler.py     # HyDE + BM25 + FAISS + Reranking logic
-│   └── LLM_handler.py       # Context assembly & Groq inference
-├── frontend/
-│   ├── src/
-│   │   ├── App.tsx          # Main React App & state manager
-│   │   ├── App.css          # Sleek premium styles & dark mode
-│   │   └── main.tsx
-│   ├── package.json
-│   └── vite.config.ts
-├── .gitignore               # Excludes secrets, node_modules, .venv, and RAG caches
-├── backend/requirements.txt # Python dependencies
-└── README.md
+Upload PDF
+   │
+   ├─ Check content/model cache
+   │
+   └─ If not cached:
+       Extract page text ──> Detect likely table pages ──> Format table rows
+              │
+              ▼
+       Split into searchable chunks ──> Create local embeddings
+              │
+              ▼
+       Save FAISS index and chunk metadata
+
+Ask a question
+   │
+   ├─ Expand the question with a hypothetical answer (HyDE, via Groq)
+   ├─ Retrieve semantic matches (FAISS) and keyword matches (BM25)
+   ├─ Deduplicate and rerank candidates locally (FlashRank)
+   └─ Generate a concise answer from retrieved context (via Groq)
+         └─ Return source page numbers to the UI
 ```
 
----
+### 1. PDF ingestion and indexing
 
-## ⚙️ Quick Start Setup Guide
+The `/upload` API accepts PDF uploads. It computes a cache identifier from the PDF contents and embedding-model name. When matching index and chunk files already exist, it reuses them instead of repeating extraction, chunking, and embedding. A cache hit still requires uploading and reading the file to calculate that identifier.
 
-### 📋 Prerequisites
-Ensure you have the following installed on your machine:
-*   [Python 3.10+](https://www.python.org/downloads/)
-*   [Node.js (v18+)](https://nodejs.org/)
-*   A free [Groq API Key](https://console.groq.com/)
+For new documents:
 
----
+1. [`backend/ingestion/pdf_loader.py`](./backend/ingestion/pdf_loader.py) extracts page text with `pypdf`. It normalizes selected punctuation and attempts to repair certain broken scientific-notation patterns.
+2. Pages that appear likely to contain tables—based on text markers or a numeric-character threshold—are additionally processed with `pdfplumber`. Extracted rows are formatted with their headers and marked as `[TABLE ROW]`.
+3. [`backend/ingestion/text_chunker.py`](./backend/ingestion/text_chunker.py) preserves each marked table row as a separate chunk. Other page text is split into parent chunks of 2,000 characters with 200-character overlap, and child chunks of 500 characters with 50-character overlap. A short prefix from the parent is added to child search text to provide context.
+4. [`backend/retrieval/embedding_generator.py`](./backend/retrieval/embedding_generator.py) creates embeddings for searchable chunk text with the local FastEmbed model `BAAI/bge-small-en-v1.5`.
+5. [`backend/retrieval/vector_store.py`](./backend/retrieval/vector_store.py) builds a FAISS L2 index and saves it alongside the chunk metadata for later searches.
 
-### Step 1: Clone the Repository
-```bash
-git clone https://github.com/WasayRabbani/RAG-document-QA.git
-cd RAG-document-QA
-```
+### 2. Retrieval and answer generation
 
----
+When a user asks a question, the backend searches the selected document sessions:
 
-### Step 2: Set Up Backend Environment
+1. **Query expansion:** Groq generates a hypothetical answer (HyDE) to help find semantically relevant document passages. If this expansion call fails, retrieval falls back to the original question.
+2. **Candidate retrieval:** FAISS returns up to 20 semantic candidates per document, subject to a configured distance threshold. BM25 contributes up to 20 positive-scoring keyword candidates per document.
+3. **Reranking:** Duplicate candidates are removed and FlashRank's `ms-marco-TinyBERT-L-2-v2` model reranks the candidates against the original question. The backend keeps up to three results per document, then selects up to three across the selected documents.
+4. **Grounded response:** The Groq-hosted model receives the retrieved parent context (or table-row text) and is instructed to answer concisely from that context. The API returns the answer and source page numbers.
 
-Create a `.env` file in the **root directory** of the repository:
+The embeddings, FAISS search, and reranking run locally. HyDE and final answer generation require a connection to Groq.
+
+## User experience
+
+- Upload PDF documents and add multiple documents to the current chat.
+- Ask questions across the currently loaded document set.
+- See page-number sources alongside answers.
+- Remove documents from the current UI session and switch between light and dark themes.
+- Receive upload and chat errors through the interface.
+
+The document list and chat history are held in frontend memory; they are not restored after a browser refresh. Removing a document from the UI does not delete its backend files or cached index.
+
+## Technology
+
+| Area | Tools |
+| --- | --- |
+| Frontend | React 19, TypeScript, Vite, Axios, custom CSS |
+| API and orchestration | Python 3.10+, FastAPI, Uvicorn |
+| PDF processing | `pypdf`, `pdfplumber` |
+| Chunking | LangChain text splitters |
+| Embeddings | FastEmbed, `BAAI/bge-small-en-v1.5` |
+| Vector search | FAISS |
+| Keyword retrieval | BM25 (`rank-bm25`) |
+| Reranking | FlashRank, `ms-marco-TinyBERT-L-2-v2` |
+| Answer generation | Groq API, default model `openai/gpt-oss-20b` |
+
+## Run locally
+
+### Prerequisites
+
+- Python 3.10 or newer
+- Node.js 18 or newer
+- A Groq API key
+
+### Configure and install
+
+From the repository root, create a `.env` file:
+
 ```env
-GROQ_API_KEY=your_groq_api_key_here
+GROQ_API_KEY=your_groq_api_key
 # Optional; defaults to openai/gpt-oss-20b
 GROQ_MODEL=openai/gpt-oss-20b
 ```
 
-#### Windows Configuration
-In the root directory, open PowerShell or Command Prompt:
-```powershell
-# Create Virtual Environment
-python -m venv .venv
+Install backend dependencies in a virtual environment:
 
-# Activate Virtual Environment
-.venv\Scripts\activate
-
-# Install Dependencies
-pip install -r backend/requirements.txt
-```
-
-#### macOS / Linux Configuration
-In the root directory, open your terminal:
 ```bash
-# Create Virtual Environment
 python3 -m venv .venv
-
-# Activate Virtual Environment
 source .venv/bin/activate
-
-# Install Dependencies
 pip install -r backend/requirements.txt
 ```
 
----
+Install frontend dependencies:
 
-### Step 3: Set Up Frontend Environment
-Open a new shell or terminal in the root directory:
 ```bash
 cd frontend
 npm install
 ```
 
----
+### Start the application
 
-## 🏃 Running the Application
+Start the API from the backend directory:
 
-### 1. Launch the Backend Server
-Make sure your Python virtual environment (`.venv`) is activated, then run:
 ```bash
 cd backend
 python api.py
 ```
-The FastAPI backend will start at: `http://localhost:8000`
-*(Note: On the first run, it downloads the compact embedding and reranking models locally. This requires internet access; subsequent runs use the cached models.)*
 
-### 2. Launch the Frontend Dev Server
-In another terminal, navigate to the frontend directory and start the dev server:
+The API runs at `http://localhost:8000`. In a separate terminal, start the frontend:
+
 ```bash
 cd frontend
 npm run dev
 ```
-The React frontend will spin up at: `http://localhost:5173` (or the port specified in your console). Open this URL in your web browser to start chatting with your PDFs!
 
----
+Vite prints the local frontend URL when it starts. To use a non-default API address, configure `VITE_API_URL` for the frontend build/runtime.
 
-## 🧠 Behind the Scenes: How a Query Works
+## API overview
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /health` | Check API health. |
+| `POST /upload` | Upload a PDF as multipart form data using the `file` field. Returns the filename, document session ID, and whether it was processed or served from cache. |
+| `POST /chat` | Send a question with `session_ids` (or a single `session_id`). Returns an answer and source page numbers. |
+
+The backend Dockerfile runs Uvicorn on port `7860`; running `python api.py` locally uses port `8000`.
+
+## Deploy to Hugging Face Spaces
+
+This repository's root `Dockerfile` builds the frontend and backend into one Docker Space. The app serves the web UI and API from the same Space URL.
+
+1. Create a Hugging Face Space with the **Docker** SDK.
+2. Add `GROQ_API_KEY` under the Space's **Settings → Variables and secrets**. Do not put API keys in the repository.
+3. Push this repository's contents to the Space. Hugging Face builds the root `Dockerfile` and serves the app on port `7860`.
+
+The backend requires internet access to download its embedding and reranking models on first use. Uploaded PDFs and generated indexes are stored in the container filesystem; configure persistent storage in Space settings if those files must survive container restarts.
+
+## Current scope and limitations
+
+- The PDF loader extracts embedded text; OCR for scanned or image-only pages is not implemented.
+- Table extraction is heuristic and depends on PDF text/layout quality; it is not guaranteed to identify every table correctly.
+- Groq is required for query expansion and final answers. Local embeddings and reranking do not make the complete chat flow offline.
+- Sources identify page numbers, but the chat response does not identify which document each page belongs to.
+- The repository does not include benchmark results or measured accuracy/performance figures.
+
+## Repository map
 
 ```text
-[User Question]
-       │
-       ▼
-┌──────────────┐
-│  HyDE Answer │ (LLM simulates a technical answer to enrich semantic relevance)
-└──────┬───────┘
-       │
-       ├──────────────────────────────────────┐
-       ▼                                      ▼
-┌──────────────┐                       ┌──────────────┐
-│ FAISS Search │ (Semantic match       │  BM25 Search │ (Lexical keyword
-│   (Top 20)   │  using local embeddings)│   (Top 20)   │  matching)
-└──────┬───────┘                       └──────┬───────┘
-       │                                      │
-       └──────────────────┬───────────────────┘
-                          ▼
-                  ┌──────────────┐
-                  │ Merge & Dup  │ (Unifies candidates into a unique list)
-                  └──────┬───────┘
-                         │
-                         ▼
-                  ┌──────────────┐
-                  │ Cross-Encoder│ (Local reranker evaluates true relevance
-                  │  Rerank Top3 │  between original question and chunks)
-                  └──────┬───────┘
-                         │
-                         ▼
-                  ┌──────────────┐
-                  │ Groq LLM Chat│ (Synthesizes final answer page-by-page
-                  │  Synthesis   │  strictly from context)
-                  └──────────────┘
+backend/
+  api.py                  FastAPI endpoints and pipeline orchestration
+  ingestion/              PDF extraction and text chunking
+  retrieval/              Embeddings, FAISS storage, search, reranking
+  generation/             Groq client and answer generation
+  Dockerfile              Backend container configuration
+frontend/
+  src/App.tsx             Upload, document selection, chat, and UI state
+  src/App.css             Application layout and themes
 ```
-
----
-
-## 🛠️ Troubleshooting & Support
-
-*   **Slow First PDF Upload / Timeout:** The backend downloads the local model files (approx. 400MB total) upon the very first upload or server launch. Please allow a few minutes for this download to complete. Subsequent runs will be lighting-fast and entirely offline.
-*   **GROQ_API_KEY Error:** Double-check that your `.env` file is in the **root** folder (not inside the `backend` folder) and contains `GROQ_API_KEY=gsk_...` with no spaces or quotation marks.
-*   **Port In Use:** If port `8000` or `5173` is busy, you can custom-assign them:
-    *   *Backend:* Change port in `api.py` at `uvicorn.run(app, port=8000)`.
-    *   *Frontend:* Vite will automatically assign another port, or you can specify one using `npm run dev -- --port XXXX`.
-
----
-
-## 📝 Author & Acknowledgements
-Built by **Wasay** — developed as a comprehensive practice for production-grade, local hybrid-retrieval GenAI applications. Contributions, bug reports, and suggestions are welcome!

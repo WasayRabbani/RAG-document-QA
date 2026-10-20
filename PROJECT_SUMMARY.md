@@ -20,13 +20,13 @@ Browser (React + Vite)
                         └── generate an answer with Groq
 ```
 
-The backend's default local URL is `http://localhost:8000`. The frontend uses `VITE_API_URL` when set, otherwise it uses that local URL.
+The backend's default local URL is `http://localhost:8000`. The frontend uses `VITE_API_URL` when set, otherwise it uses that local URL during development and same-origin API routes in production.
 
 ## Backend files
 
 | File | Responsibility |
 | --- | --- |
-| [`backend/api.py`](./backend/api.py) | FastAPI application and orchestration. Defines `/health`, `/upload`, and `/chat`; validates PDF uploads; derives a session ID from the PDF bytes and embedding model; checks for cached index/chunk files; invokes ingestion, retrieval, and generation modules. Chat accepts either `session_id` or `session_ids` and searches across selected PDF sessions. |
+| [`backend/api.py`](./backend/api.py) | FastAPI application and orchestration. Defines `/health`, `/upload`, and `/chat`; validates PDF uploads; derives a session ID from the PDF bytes and embedding model; checks for cached index/chunk files; invokes ingestion, retrieval, and generation modules. Chat accepts either `session_id` or `session_ids` and searches across selected PDF sessions. When the built frontend is present, it also serves the frontend at `/`. |
 | [`backend/ingestion/pdf_loader.py`](./backend/ingestion/pdf_loader.py) | Extracts page text with `pypdf`, conditionally extracts tables with `pdfplumber`, formats table rows with headers, cleans common symbols, and returns page-numbered text. |
 | [`backend/ingestion/text_chunker.py`](./backend/ingestion/text_chunker.py) | Separates marked table rows into individual chunks. Splits remaining page text into parent chunks (2,000 characters, 200 overlap) and child search chunks (500 characters, 50 overlap); stores parent context with each child. |
 | [`backend/retrieval/embedding_generator.py`](./backend/retrieval/embedding_generator.py) | Encodes each chunk's searchable text in batches using the shared local embedder. |
@@ -40,8 +40,9 @@ The backend's default local URL is `http://localhost:8000`. The frontend uses `V
 | [`backend/requirements.txt`](./backend/requirements.txt) | Python runtime dependencies for the API, PDF processing, embeddings, FAISS, retrieval, reranking, and Groq client. |
 | [`backend/Dockerfile`](./backend/Dockerfile) | Builds the Python 3.10 backend image and starts Uvicorn on port 7860; the backend directory is expected to be the Docker build context. |
 | [`backend/.dockerignore`](./backend/.dockerignore) | Excludes local virtual environments, secrets, generated storage/uploads, and miscellaneous local files from the Docker build context. |
-| [`backend/README.md`](./backend/README.md) | Hugging Face Spaces deployment metadata and a short backend deployment overview. |
 | [`backend/sequence.txt`](./backend/sequence.txt) | Compact, informal outline of the main ingestion and question-answering sequence. |
+| [`Dockerfile`](./Dockerfile) | Builds the complete frontend and backend image for a single Hugging Face Docker Space on port 7860. |
+| [`.dockerignore`](./.dockerignore) | Excludes secrets, local caches, generated storage, installed dependencies, and sample PDFs from the root Docker build context. |
 
 ### Backend API contract
 
