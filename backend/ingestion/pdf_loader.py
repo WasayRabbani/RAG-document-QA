@@ -1,141 +1,121 @@
-"""
-PDF Loader — Hybrid Strategy:
-- Uses pypdf for text extraction (proven to work correctly)
-- Uses pdfplumber ONLY for structured table detection
-- Applies math symbol repair for broken scientific notation
-"""
+'''
+## PDF Ingestion Pipeline — Workflow
 
-import re
+1. **Load PDF Files**  
+   Accept a single PDF file or a directory containing multiple PDFs and open each file for processing.
+
+2. **Extract Page Content**  
+   Use `pypdf` to extract text from each page while preserving page numbers and document references.
+
+3. **Extract Document and Page Metadata**  
+   Collect available PDF metadata, including filename, document properties, page count, and relevant page-level information.
+
+4. **Extract Tables Separately**  
+   Use `pdfplumber` to extract tables independently from the body text, avoiding duplicate extraction of narrative content.
+
+5. **Structure the Extracted Data**  
+   Organize the extracted text, tables, and metadata into a consistent, page-wise JSON structure.
+
+6. **Validate Extraction Results**  
+   Check for missing pages, empty text, extraction errors, incomplete tables, and missing metadata. Record warnings where applicable.
+
+7. **Process All Pages and Documents**  
+   Repeat the extraction, structuring, and validation steps for every page in each PDF file.
+
+8. **Save the Final JSON Output**  
+   Save the structured data with document identifiers, filenames, page numbers, and table or paragraph references to support traceability and downstream RAG evaluation.
+'''
+
+
+
+from pathlib import Path
 from pypdf import PdfReader
-import logging
-
-# logging is python's built-in logging module, which allows us to log messages to the console or a file. We can set different logging levels (DEBUG, INFO, WARNING, ERROR, CRITICAL) to control the verbosity of the output. In this code, we create a logger instance for the PDFLoader class to log messages related to PDF loading and processing.
-
-logger = logging.getLogger(__name__)
+import pdfplumber
 
 class PDFLoader:
-    def __init__(self, pdf_link):
-        self.pdf = pdf_link
+    # constructor should load the pdf and it loads multiple pdfs
+    def __init__(self, path: str):
+        self.path=Path(path)
 
-    def _clean_text(self, text: str) -> str:
-        """Fix common PDF character encoding issues for math and tables."""
-        if not text:
-            return ""
-        replacements = {
-            "·": "*",
-            "×": "x",
-            "−": "-",
-            "–": "-",
-            "\u2019": "'",
-            "\u201c": '"',
-            "\u201d": '"',
-        }
-        for old, new in replacements.items():
-            text = text.replace(old, new)
+        if self.path.is_file():
+            self.pdf_files=[self.path]
+        else:
+                  self.pdf_files=list(self.path.glob("*.pdf"))
         
+        # for pdf in self.pdf_files:
+        #     print(pdf.name) prints names of all pdfs ina folder
+        # print(self.pdf_files[0]) Shows complete link to a pdf
 
-        # so when i used .items here, it makes a tuple of key and value, so we can use that to replace the old character with the new one in the text. 
 
 
-        
-        # Fix scientific notation: "10 19" or "10?19" → "10^19"
-        text = re.sub(r'(\d)\s*[·\?\*×]\s*10\s*(\d{2})', r'\1 x 10^\2', text)
-        return text
 
-    def _should_check_for_tables(self, text: str) -> bool:
-        """Fast check to see if a page likely contains a table before running slow extraction."""
-        if not text:
-            return False
-        
-        # Keywords that usually signal a table
-        table_markers = ["Table ", "TABLE ", "Index", "Summary", "%", "Total"]
-        if any(marker in text for marker in table_markers):
-            return True
+    def extract_text(self):
+
+
+        for pdf in self.pdf_files:
+            reader=PdfReader(pdf)
             
-        # Or if the page has a high density of numbers
-        numbers = re.findall(r'\d+', text)
-        if len(numbers) > 15: # High number count usually means data
-            return True
+            for page in reader.pages:
+                text=page.extract_text()
+                print(text)
+           
+    def extract_metadata(self):
+
+      documents={}
+
+
+        # Getting page level meta data
+      for pdf in self.pdf_files:
+            reader=PdfReader(pdf)
+
+
+            documents[pdf.name]={
+            "file_name":pdf.name,
+            "pages":[]
+         }
             
-        return False
-
-    def _format_table_row(self, headers: list, row: list) -> str:
-        """Helper to format a single table row into a readable text format."""
-        pairs = []
-        for h, v in zip(headers, row):
-            val = str(v).strip().replace('\n', ' ') if v else ''
-            if val:
-                pairs.append(f"{h}: {val}" if h else val)
-        return " | ".join(pairs)
-
-    def load_pdf(self):
-        try:
-            reader = PdfReader(self.pdf)
-            total_pages = len(reader.pages)
-            logger.info(f"Starting extraction of {total_pages} pages...")
-
-            pages_data = []
-
-            # We'll open pdfplumber once to keep it ready
-            import pdfplumber
-            with pdfplumber.open(self.pdf) as plumber_pdf:
-                for i, page in enumerate(reader.pages):
-                    page_num = i + 1
-                    
-                    if page_num % 10 == 0:
-                        logger.info(f"  → Processing page {page_num}/{total_pages}...")
-
-                    try:
-                        # 1. Fast text extraction using pypdf
-                        raw_text = page.extract_text()
-                        if not raw_text:
-                            continue
-                        
-                        cleaned_text = self._clean_text(raw_text.strip())
-                        table_rows = []
-
-                        # 2. ONLY run slow table extraction if the page looks like it has a table
-                        if self._should_check_for_tables(raw_text):
-                            plumber_page = plumber_pdf.pages[i]
-                            tables = plumber_page.extract_tables()
-                            
-                            if tables:
-                                for table in tables:
-                                    if not table or len(table) < 2:
-                                        continue
-                                    headers = [str(h).strip().replace('\n', ' ') if h else '' for h in table[0]]
-                                    # Basic sanity check on headers
-                                    if any(h and not h.isspace() for h in headers):
-                                        for row in table[1:]:
-                                            if not row: continue
-                                            formatted = self._format_table_row(headers, row)
-                                            if formatted:
-                                                table_rows.append("[TABLE ROW] " + formatted)
-
-                        # 3. Combine
-                        if table_rows:
-                            combined = "\n".join(table_rows) + "\n\n" + cleaned_text
-                        else:
-                            combined = cleaned_text
-                        
-                        pages_data.append({"text": combined, "page": page_num})
-                        
-                    except Exception as e:
-                        logger.warning(f"Skipping page {page_num} due to error: {e}")
-                        continue
+            for page_num,page in enumerate(reader.pages,start=1):
+                text=page.extract_text() or ""
             
-            if not pages_data:
-                raise ValueError("No text could be extracted.")
-                
-            logger.info(f"Successfully extracted {len(pages_data)} pages.")
-            return pages_data
-
-        except Exception as e:
-            logger.error(f"Failed to load PDF {self.pdf}: {e}")
-            raise e
-
+                metadata={
+                   
+                    "page_num":page_num,
+                    "text":text,
+                    "character_count":len(text)
+                }
+                documents[pdf.name]['pages'].append(metadata)
+      return documents
 
 
 
-""" The main function of this file is to upload A PDF to app and we have to extract all of the data from this PDF so for that purpose we are using libraries Pypdf and PDF Plumber pypdf is used for text because it is exceptionally fast and not good with tables on the other hand we are using pipe lumber for pages that are having tables because it is good with tables but it is slow So first thing is when we extract all of the data we use by PDF and if on any page we encounter a table we switch to PDF plumber once the data has been retrieved clean the data in Cleaning we clean math functions and some scientific notations Then we use another function that's main purpose is to check page hash table if page has a table then we switch to pipe number and another function is used to make sure that the data extracted from the table has its semantic meaning restored Then we have the main function that loads my whole PDF
-"""
+    def extract_tables(self):
+      documents={}
+      for pdf in self.pdf_files:
+
+
+            documents[pdf.name]={
+               'file_name':pdf.name,
+               'pages':{}
+            }
+            with pdfplumber.open(pdf) as file:
+               for page_num,page in enumerate(file.pages,start=1):
+                  tables=page.extract_tables()
+                  if tables:
+                     documents[pdf.name]['pages'][page_num]=[
+                        {
+                           'table_num':table_num,
+                           'data':table
+                        }
+                        for table_num,table in enumerate(tables,start=1)
+                     ]
+      return documents
+                     
+
+
+      
+obj=PDFLoader(r"/home/wasay-rabbani/Desktop/Test Pdfs")
+# obj.extract_text()
+# obj.extract_metadata()
+print(obj.extract_tables())
+
+
